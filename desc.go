@@ -9,6 +9,7 @@ type desc struct {
 	fn   reflect.Value
 	args []reflect.Value
 
+	numIn    int
 	variadic bool
 	convs    []converter
 }
@@ -19,9 +20,10 @@ func newDesc(fn interface{}) (*desc, error) {
 		return nil, newErrNotFunc(vfn)
 	}
 	var (
-		tfn   = vfn.Type()
-		numIn = tfn.NumIn()
-		convs = make([]converter, 0, numIn)
+		tfn      = vfn.Type()
+		numIn    = tfn.NumIn()
+		variadic = tfn.IsVariadic()
+		convs    = make([]converter, 0, numIn)
 	)
 	for i := 0; i < numIn; i++ {
 		c, err := findConverter(tfn.In(i))
@@ -33,7 +35,8 @@ func newDesc(fn interface{}) (*desc, error) {
 	// TODO: build descriptors
 	return &desc{
 		fn:       vfn,
-		variadic: tfn.IsVariadic(),
+		numIn:    numIn,
+		variadic: variadic,
 		convs:    convs,
 	}, nil
 }
@@ -56,6 +59,9 @@ func (d *desc) parse(args ...string) error {
 		}
 		d.args = append(d.args, v)
 		n++
+	}
+	if d.numIn != len(d.args) {
+		return errors.New("too less args")
 	}
 	return nil
 }
