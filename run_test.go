@@ -50,3 +50,17 @@ func TestRunLess(t *testing.T) {
 	// TODO: check err restrictly
 	log.Printf("Run()=%s", err)
 }
+
+func TestRunPtr(t *testing.T) {
+	var arg0 *string
+	fn := func(v *string) {
+		arg0 = v
+	}
+	err := Run(fn, "123")
+	if err != nil {
+		t.Error("should return error")
+	}
+	if arg0 == nil || *arg0 != "123" {
+		t.Error("unexpected: %+v", arg0)
+	}
+}

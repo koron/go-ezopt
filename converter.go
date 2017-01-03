@@ -2,6 +2,7 @@ package ezopt
 
 import (
 	"errors"
+	"log"
 	"reflect"
 	"strconv"
 )
@@ -31,9 +32,17 @@ type converter interface {
 }
 
 func findConverter(t reflect.Type) (converter, error) {
-	c, ok := basicTypes[t.Kind()]
+	k := t.Kind()
+	c, ok := basicTypes[k]
 	if ok {
 		return c, nil
+	}
+	if k == reflect.Ptr {
+		c, err := findConverter(t.Elem())
+		if err != nil {
+			return nil, err
+		}
+		return &ptrConverter{c: c}, nil
 	}
 	return nil, errors.New("not supported type")
 }
@@ -126,4 +135,17 @@ func (c *floatConverter) convert(s string) (reflect.Value, error) {
 		return reflect.ValueOf(float64(n)), nil
 	}
 	panic("unknown size")
+}
+
+type ptrConverter struct {
+	c converter
+}
+
+func (c *ptrConverter) convert(s string) (reflect.Value, error) {
+	v, err := c.c.convert(s)
+	if err != nil {
+		return reflect.Value{}, err
+	}
+	log.Printf("%#v", v)
+	return v.Addr(), nil
 }
