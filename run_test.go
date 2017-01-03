@@ -52,15 +52,15 @@ func TestRunLess(t *testing.T) {
 }
 
 func TestRunPtr(t *testing.T) {
-	var arg0 *string
-	fn := func(v *string) {
+	var arg0 *int
+	fn := func(v *int) {
 		arg0 = v
 	}
 	err := Run(fn, "123")
 	if err != nil {
 		t.Error("should return error")
 	}
-	if arg0 == nil || *arg0 != "123" {
-		t.Error("unexpected: %+v", arg0)
+	if arg0 == nil || *arg0 != 123 {
+		t.Errorf("unexpected: %+v", arg0)
 	}
 }
