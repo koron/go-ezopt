@@ -1,9 +1,6 @@
 package ezopt
 
-import (
-	"log"
-	"testing"
-)
+import "testing"
 
 func TestRunSimple(t *testing.T) {
 	var arg0 int
@@ -31,11 +28,9 @@ func TestRunMuch(t *testing.T) {
 		arg0 = n
 	}
 	err := Run(fn, "123", "456")
-	if err == nil {
-		t.Fatal("should return error")
+	if err == nil || err.Error() != "too much args" {
+		t.Errorf("unexpected error: %s", err)
 	}
-	// TODO: check err restrictly
-	log.Printf("Run()=%s", err)
 }
 
 func TestRunLess(t *testing.T) {
@@ -44,11 +39,9 @@ func TestRunLess(t *testing.T) {
 		arg0 = n
 	}
 	err := Run(fn)
-	if err == nil {
-		t.Fatal("should return error")
+	if err == nil || err.Error() != "too less args" {
+		t.Errorf("unexpected error: %s", err)
 	}
-	// TODO: check err restrictly
-	log.Printf("Run()=%s", err)
 }
 
 func TestRunPtr(t *testing.T) {
