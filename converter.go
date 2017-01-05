@@ -6,6 +6,8 @@ import (
 	"strconv"
 )
 
+const convertTerminator = "--"
+
 var basicTypes = map[reflect.Kind]converter{
 	reflect.Bool:   &boolConverter{},
 	reflect.String: &stringConverter{},
@@ -146,6 +148,9 @@ type ptrConverter struct {
 }
 
 func (c *ptrConverter) convert(s string) (reflect.Value, error) {
+	if s == convertTerminator {
+		return reflect.Zero(reflect.PtrTo(c.t)), nil
+	}
 	v, err := c.c.convert(s)
 	if err != nil {
 		return reflect.Value{}, err

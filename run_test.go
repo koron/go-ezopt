@@ -56,11 +56,20 @@ func TestRunPtr(t *testing.T) {
 	fn := func(v *int) {
 		arg0 = v
 	}
+
 	err := Run(fn, "123")
 	if err != nil {
 		t.Error("should return error")
 	}
 	if arg0 == nil || *arg0 != 123 {
 		t.Errorf("unexpected: %+v", arg0)
+	}
+
+	err = Run(fn, "--")
+	if err != nil {
+		t.Error("should return error")
+	}
+	if arg0 != nil {
+		t.Errorf("unexpected: %+v", *arg0)
 	}
 }
