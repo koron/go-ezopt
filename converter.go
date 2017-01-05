@@ -29,7 +29,7 @@ var basicTypes = map[reflect.Kind]converter{
 }
 
 type converter interface {
-	convert(s string) (reflect.Value, error)
+	convert([]string) (reflect.Value, []string, error)
 }
 
 func findConverter(t reflect.Type) (converter, error) {
@@ -38,7 +38,8 @@ func findConverter(t reflect.Type) (converter, error) {
 	if ok {
 		return c, nil
 	}
-	if k == reflect.Ptr {
+	switch k {
+	case reflect.Ptr:
 		t2 := t.Elem()
 		c, err := findConverter(t2)
 		if err != nil {
@@ -48,96 +49,113 @@ func findConverter(t reflect.Type) (converter, error) {
 			t: t2,
 			c: c,
 		}, nil
+	case reflect.Struct:
+		c, err := newStructConverter(t)
+		if err != nil {
+			return nil, err
+		}
+		return c, nil
 	}
 	return nil, errors.New("not supported type")
 }
 
 type boolConverter struct{}
 
-func (c *boolConverter) convert(s string) (reflect.Value, error) {
+func (c *boolConverter) convert(args []string) (reflect.Value, []string, error) {
+	s, args := args[0], args[1:]
 	b, err := strconv.ParseBool(s)
 	if err != nil {
-		return reflect.Value{}, err
+		return reflect.Value{}, nil, err
 	}
-	return reflect.ValueOf(b), nil
+	return reflect.ValueOf(b), args, nil
 }
 
 type stringConverter struct{}
 
-func (c *stringConverter) convert(s string) (reflect.Value, error) {
-	return reflect.ValueOf(s), nil
+func (c *stringConverter) convert(args []string) (reflect.Value, []string, error) {
+	s, args := args[0], args[1:]
+	return reflect.ValueOf(s), args, nil
 }
 
 type intConverter struct {
 	size int
 }
 
-func (c *intConverter) convert(s string) (reflect.Value, error) {
-	sz := c.size
-	if sz == 0 {
-		sz = 32
-	}
-	n, err := strconv.ParseInt(s, 0, sz)
+func (c *intConverter) convert(args []string) (reflect.Value, []string, error) {
+	s, args := args[0], args[1:]
+	n, err := strconv.ParseInt(s, 0, c.bitNum())
 	if err != nil {
-		return reflect.Value{}, err
+		return reflect.Value{}, nil, err
 	}
 	switch c.size {
 	case 0:
-		return reflect.ValueOf(int(n)), nil
+		return reflect.ValueOf(int(n)), args, nil
 	case 8:
-		return reflect.ValueOf(int8(n)), nil
+		return reflect.ValueOf(int8(n)), args, nil
 	case 16:
-		return reflect.ValueOf(int16(n)), nil
+		return reflect.ValueOf(int16(n)), args, nil
 	case 32:
-		return reflect.ValueOf(int32(n)), nil
+		return reflect.ValueOf(int32(n)), args, nil
 	case 64:
-		return reflect.ValueOf(int64(n)), nil
+		return reflect.ValueOf(int64(n)), args, nil
 	}
 	panic("unknown size")
+}
+
+func (c *intConverter) bitNum() int {
+	if c.size == 0 {
+		return 32
+	}
+	return c.size
 }
 
 type uintConverter struct {
 	size int
 }
 
-func (c *uintConverter) convert(s string) (reflect.Value, error) {
-	sz := c.size
-	if sz == 0 {
-		sz = 32
-	}
-	n, err := strconv.ParseUint(s, 0, sz)
+func (c *uintConverter) convert(args []string) (reflect.Value, []string, error) {
+	s, args := args[0], args[1:]
+	n, err := strconv.ParseUint(s, 0, c.bitNum())
 	if err != nil {
-		return reflect.Value{}, err
+		return reflect.Value{}, nil, err
 	}
 	switch c.size {
 	case 0:
-		return reflect.ValueOf(uint(n)), nil
+		return reflect.ValueOf(uint(n)), args, nil
 	case 8:
-		return reflect.ValueOf(uint8(n)), nil
+		return reflect.ValueOf(uint8(n)), args, nil
 	case 16:
-		return reflect.ValueOf(uint16(n)), nil
+		return reflect.ValueOf(uint16(n)), args, nil
 	case 32:
-		return reflect.ValueOf(uint32(n)), nil
+		return reflect.ValueOf(uint32(n)), args, nil
 	case 64:
-		return reflect.ValueOf(uint64(n)), nil
+		return reflect.ValueOf(uint64(n)), args, nil
 	}
 	panic("unknown size")
+}
+
+func (c *uintConverter) bitNum() int {
+	if c.size == 0 {
+		return 32
+	}
+	return c.size
 }
 
 type floatConverter struct {
 	size int
 }
 
-func (c *floatConverter) convert(s string) (reflect.Value, error) {
+func (c *floatConverter) convert(args []string) (reflect.Value, []string, error) {
+	s, args := args[0], args[1:]
 	n, err := strconv.ParseFloat(s, c.size)
 	if err != nil {
-		return reflect.Value{}, err
+		return reflect.Value{}, nil, err
 	}
 	switch c.size {
 	case 32:
-		return reflect.ValueOf(float32(n)), nil
+		return reflect.ValueOf(float32(n)), args, nil
 	case 64:
-		return reflect.ValueOf(float64(n)), nil
+		return reflect.ValueOf(float64(n)), args, nil
 	}
 	panic("unknown size")
 }
@@ -147,15 +165,29 @@ type ptrConverter struct {
 	c converter
 }
 
-func (c *ptrConverter) convert(s string) (reflect.Value, error) {
-	if s == convertTerminator {
-		return reflect.Zero(reflect.PtrTo(c.t)), nil
+func (c *ptrConverter) convert(args []string) (reflect.Value, []string, error) {
+	if args[0] == convertTerminator {
+		return reflect.Zero(reflect.PtrTo(c.t)), args[1:], nil
 	}
-	v, err := c.c.convert(s)
+	v, args, err := c.c.convert(args)
 	if err != nil {
-		return reflect.Value{}, err
+		return reflect.Value{}, nil, err
 	}
 	p := reflect.New(c.t)
 	p.Elem().Set(v)
-	return p, nil
+	return p, args, nil
+}
+
+type structConverter struct {
+	// TODO:
+}
+
+func newStructConverter(t reflect.Type) (*structConverter, error) {
+	// TODO:
+	return nil, nil
+}
+
+func (c *structConverter) convert(args[]string) (reflect.Value,[]string, error) {
+	// TODO:
+	return reflect.Value{}, nil, errors.New("not support yet")
 }

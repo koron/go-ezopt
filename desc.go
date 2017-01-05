@@ -43,8 +43,7 @@ func newDesc(fn interface{}) (*desc, error) {
 
 func (d *desc) parse(args ...string) error {
 	n := 0
-	for i := 0; i < len(args); i++ {
-		s := args[i]
+	for len(args) > 0 {
 		// parse normal string as an arg.
 		if n >= len(d.convs) {
 			if !d.variadic {
@@ -53,7 +52,11 @@ func (d *desc) parse(args ...string) error {
 			}
 			n = len(d.convs) - 1
 		}
-		v, err := d.convs[n].convert(s)
+		var (
+			v   reflect.Value
+			err error
+		)
+		v, args, err = d.convs[n].convert(args)
 		if err != nil {
 			return err
 		}
