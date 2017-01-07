@@ -2,11 +2,15 @@ package ezopt
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 )
 
 const convertTerminator = "--"
+
+var invalidValue = reflect.Value{}
 
 var basicTypes = map[reflect.Kind]converter{
 	reflect.Bool:   &boolConverter{},
@@ -65,7 +69,7 @@ func (c *boolConverter) convert(args []string) (reflect.Value, []string, error) 
 	s, args := args[0], args[1:]
 	b, err := strconv.ParseBool(s)
 	if err != nil {
-		return reflect.Value{}, nil, err
+		return invalidValue, nil, err
 	}
 	return reflect.ValueOf(b), args, nil
 }
@@ -85,7 +89,7 @@ func (c *intConverter) convert(args []string) (reflect.Value, []string, error) {
 	s, args := args[0], args[1:]
 	n, err := strconv.ParseInt(s, 0, c.bitNum())
 	if err != nil {
-		return reflect.Value{}, nil, err
+		return invalidValue, nil, err
 	}
 	switch c.size {
 	case 0:
@@ -117,7 +121,7 @@ func (c *uintConverter) convert(args []string) (reflect.Value, []string, error) 
 	s, args := args[0], args[1:]
 	n, err := strconv.ParseUint(s, 0, c.bitNum())
 	if err != nil {
-		return reflect.Value{}, nil, err
+		return invalidValue, nil, err
 	}
 	switch c.size {
 	case 0:
@@ -149,7 +153,7 @@ func (c *floatConverter) convert(args []string) (reflect.Value, []string, error)
 	s, args := args[0], args[1:]
 	n, err := strconv.ParseFloat(s, c.size)
 	if err != nil {
-		return reflect.Value{}, nil, err
+		return invalidValue, nil, err
 	}
 	switch c.size {
 	case 32:
@@ -171,7 +175,7 @@ func (c *ptrConverter) convert(args []string) (reflect.Value, []string, error) {
 	}
 	v, args, err := c.c.convert(args)
 	if err != nil {
-		return reflect.Value{}, nil, err
+		return invalidValue, nil, err
 	}
 	p := reflect.New(c.t)
 	p.Elem().Set(v)
@@ -179,15 +183,84 @@ func (c *ptrConverter) convert(args []string) (reflect.Value, []string, error) {
 }
 
 type structConverter struct {
-	// TODO:
+	t  reflect.Type
+	fc []*fieldConverter
 }
 
 func newStructConverter(t reflect.Type) (*structConverter, error) {
-	// TODO:
-	return nil, nil
+	n := t.NumField()
+	fc := make([]*fieldConverter, 0, n)
+	for i := 0; i < n; i++ {
+		f := t.Field(i)
+		c, err := findConverter(f.Type)
+		if err != nil {
+			return nil, err
+		}
+		fc = append(fc, &fieldConverter{
+			name:  f.Name,
+			index: f.Index,
+			c:     c,
+		})
+	}
+	return &structConverter{
+		t:  t,
+		fc: fc,
+	}, nil
 }
 
-func (c *structConverter) convert(args[]string) (reflect.Value,[]string, error) {
-	// TODO:
-	return reflect.Value{}, nil, errors.New("not support yet")
+func (c *structConverter) convert(args []string) (reflect.Value, []string, error) {
+	v := reflect.Zero(c.t)
+	for len(args) > 0 {
+		s0 := args[0]
+		args = args[1:]
+		if s0[0] != '-' {
+			return invalidValue, nil, fmt.Errorf("unknown option: %s", s0)
+		}
+		if s0 == "--" {
+			break
+		}
+		fc, err := c.findField(s0[1:])
+		if err != nil {
+			return invalidValue, nil, err
+		}
+		if len(args) <= 0 {
+			return invalidValue, nil, fmt.Errorf("no arg for option: %s", s0)
+		}
+		var fv reflect.Value
+		fv, args, err = fc.c.convert(args)
+		if err != nil {
+			return invalidValue, nil, err
+		}
+		v.FieldByIndex(fc.index).Set(fv)
+	}
+	return v, args, nil
+}
+
+func (c *structConverter) findField(name string) (*fieldConverter, error) {
+	var (
+		found *fieldConverter
+		n     = strings.ToLower(name)
+	)
+	for _, fc := range c.fc {
+		if fc.name == name {
+			return fc, nil
+		}
+		if strings.HasPrefix(strings.ToLower(fc.name), n) {
+			if found != nil {
+				return nil, fmt.Errorf("option %q matches fields %q and %q",
+					name, found.name, fc.name)
+			}
+			found = fc
+		}
+	}
+	if found == nil {
+		return nil, fmt.Errorf("unknown option: %q", name)
+	}
+	return found, nil
+}
+
+type fieldConverter struct {
+	name  string
+	index []int
+	c     converter
 }
